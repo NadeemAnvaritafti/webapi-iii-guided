@@ -14,22 +14,34 @@ function logger(req, res, next) {
 
 // write a gatekeeper middleware that reads a password from the headers, and if the password is 'mellon' let it continue
 // if not, send back status code 401 with a message
-
 function gatekeeper(req, res, next) {
-  if (req.originalUrl === '/mellon') {
+  const password = req.headers.password;
+  if (password && password.toLowerCase() === 'mellon') {
     next();
   } else {
-    res.status(401).send('Sorry you dont have the proper credentials');
+    res.status(401).json({ error: "you don't have the proper credentials "});
+  }
+}
+
+// checkRole('admin'), checkRole('agents')
+function checkRole(role) {
+  return function (req, res, next) {
+    if (role && role === req.headers.role) {
+      next();
+    } else {
+      res.status(403).json({ message: "can't touch this!" }); // 403 means i know who you are but you don't have access
+    }
   }
 }
 
 // apply middleware
 // server.use(helmet()) // <<<<< 2. use the package (we don't want to use it globally so we comment it out then just invoke it locally in the get request at /area51)
+// helmet() is a function that returns a middleware function (that's why we have to invoke it at the endpoint locally)
 server.use(express.json()); // built-in middleware
 server.use(logger);
 
 // endpoints
-server.use('/api/hubs', hubsRouter); // this is local middleware because it only applies to /api/hubs
+server.use('/api/hubs', checkRole("admin"), hubsRouter); // this is local middleware because it only applies to /api/hubs
 
 server.get('/', (req, res) => {
   const nameInsert = (req.name) ? ` ${req.name}` : '';
@@ -44,9 +56,10 @@ server.get('/echo', (req, res) => {
   res.send(req.headers);
 })
 
-server.get('/area51', helmet(), gatekeeper(), (req, res) => {
+server.get('/area51', gatekeeper, checkRole("agent"), (req, res) => {
   res.send(req.headers);
 })
+
 
 
 module.exports = server;
